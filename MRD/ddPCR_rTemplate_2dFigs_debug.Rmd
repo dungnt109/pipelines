@@ -1,0 +1,242 @@
+---
+params:
+  pid: "Patient"
+  sid: "Sample"
+  mid: ""
+  date: "`r Sys.time()`"
+  marker.channel: 1
+  gus.channel: 2
+  dx.gus: ""
+  fu.gus: ""
+  hl60.gus: ""
+  h2o.gus: ""
+  dx.marker: ""
+  hl60.marker: ""
+  h2o.marker: ""
+  fu.marker: ""
+  dx.baseline: NA
+  hl60.gus.dilutionX: 200
+  hl60.gus.concentration: ""
+  show_outliers: TRUE
+title: "ddPCR laboratory results - 2D Figures"
+fontsize: 10pt
+geometry: margin=1.5cm
+fig_width: 8 
+fig_height: 6
+output:
+  pdf_document:
+    keep_tex: false
+    toc: false
+    highlight: zenburn
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+---
+
+
+<!--- Define Headers and Footers --->
+\fancypagestyle{plain}{%
+  \renewcommand{\headrulewidth}{0pt}%
+  \fancyhf{}%
+  \fancyfoot[C]{\footnotesize Page \thepage\, of\, \pageref*{LastPage} `r params$sid` `r params$mid` Generated at `r params$date` by ddPCR MRD Pipeline Version 1.0}
+  \setlength\footskip{0pt}
+}
+\pagestyle{plain}
+\center
+# Sample `r params$sid`, Marker `r params$mid`
+
+
+```{r echo=FALSE}
+library(knitr)
+plot1d <- function(multiwell.results, channel, ...) {
+	x <- c()
+	y <- c()
+	mask <- c()
+	seg <- c(0)
+	lower <- c()
+	higher <- c()
+	mids <- c()
+	col <- c()
+	current.x <- 0
+	for (results in multiwell.results) {
+		x <- c(x, current.x + (1:nrow(results$intensities)))
+		
+		y <- c(y, results$intensities[, channel])
+		mask <- c(mask, results$mask)
+		lower <- c(lower, current.x)
+		mids <- c(mids, current.x + 0.5 * nrow(results$intensities))
+		current.x <- current.x + nrow(results$intensities)
+		higher <- c(higher, current.x)
+		col <- c(col, 1 + (results$intensities[, channel] > results$threshold))
+		seg <- c(seg, current.x + 0.5)
+	}
+	plot(x, y, cex=1, xlab="", ylab = "intensities", axes=FALSE, pch=c(4, 16)[mask + 1], col=col, ...)
+	box()
+	axis(2)
+	axis(1, at = mids, labels = FALSE)
+	
+	text(x = mids,
+     y = par("usr")[3] - (max(y) - min(y))/30,
+     labels = sapply(multiwell.results, "[[", "name"),
+     xpd = NA,
+     srt = 25,
+     cex = 0.8, adj=1)
+	 
+	for (i in 1:length(multiwell.results)) {
+		lines(c(lower[i], higher[i]), c(multiwell.results[[i]]$threshold, multiwell.results[[i]]$threshold), lty=1, col=2, lwd=2)
+	}
+	for (i in 1:length(seg)) {
+		lines(c(seg[i], seg[i]), c(1e-6, 1e6), col="blue", lty=1)
+	}
+}
+plot2d <- function(singlewell.results, channel, ...) {
+		plot(singlewell.results$intensities[, marker.channel], singlewell.results$intensities[, gus.channel], col = (singlewell.results$intensities[, channel] > singlewell.results$threshold) + 1,
+			pch=c(4, 16)[singlewell.results$mask + 1],
+			main=paste(singlewell.results$name, names(singlewell.results$name)), xlab = "Channel 1", ylab="Channel 2", ...)
+		if (channel == 1) {
+			lines(c(singlewell.results$threshold, singlewell.results$threshold), c(-1e8, 1e8), col=2, lwd=1.5)
+		} else if (channel == 2) {
+			lines(c(-1e8, 1e8), c(singlewell.results$threshold, singlewell.results$threshold), col=2, lwd=1.5)
+		}
+}
+get_info <- function(multiwell.results) {
+	tab <- t(sapply(multiwell.results, function(results) {
+		events <- nrow(results$intensities)
+		outliers <- results$n.outliers
+		used.events <- events - outliers
+		threshold <- results$threshold
+		positive <- results$n.positive.droplets
+		concentration <- results$concentration
+		c(events, outliers, used.events, threshold, positive, concentration)
+	}))
+	rownames(tab) <- sapply(multiwell.results, "[[", "name")
+	colnames(tab) <- c("events", "outliers", "used.events", "threshold", "positive", "concentration")
+	tab
+}
+
+get_merged_info <- function(multiwell.results, sample.names=NA) {
+	if (is.na(sample.names)) {
+		sample.names = sapply(multiwell.results, "[[", "name")
+	
+	}
+	tab <- get_info(multiwell.results)
+	unique.names <- unique(sample.names)
+	
+	total.events <- tapply(tab[, "events"], sample.names, sum)[unique.names]
+	total.outliers <- tapply(tab[, "outliers"], sample.names, sum)[unique.names]
+	total.used.events <- tapply(tab[, "used.events"], sample.names, sum)[unique.names]
+	total.positive <- tapply(tab[, "positive"], sample.names, sum)[unique.names]
+	concentration <- -log(1-(total.positive/total.used.events))/0.00085
+	concentration <- concentration[unique.names]
+	replicates <- tapply(tab[, "events"], sample.names, length)[unique.names]
+	info <- cbind(replicates=replicates, events=total.events, outliers=total.outliers, used.events=total.used.events,positive=total.positive,concentration=concentration )
+	rownames(info) <- unique.namesA
+	info
+}
+```
+
+## Albumin, diagnostic sample
+
+```{r 2dFigures_dx_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$dx.gus)) {
+	plot2d(params$dx.gus[[i]], gus.channel)
+	#info <- get_info(params$dx.gus[i])
+	#kable(info, caption = paste("Summary of", params$dx.gus[[i]]$name))
+}
+```
+
+
+## Albumin, HL60
+
+```{r 2dFigures_mnc_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$hl60.gus)) {
+	plot2d(params$hl60.gus[[i]], gus.channel)
+	#info <- get_info(params$hl60.gus[i])
+	#kable(info, caption = paste("Summary of", params$hl60.gus[[i]]$name))
+}
+```
+
+
+## Albumin, NTC/H2O
+
+```{r 2dFigures_h2o_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+results <- c(params$hl60.gus, params$h2o.gus)
+marker.channel.max <- max(sapply(results, function(x) {max(x$intensities[, marker.channel])}))
+marker.channel.min <- min(sapply(results, function(x) {min(x$intensities[, marker.channel])}))
+gus.channel.max <- max(sapply(results, function(x) {max(x$intensities[, gus.channel])}))
+gus.channel.min <- min(sapply(results, function(x) {min(x$intensities[, gus.channel])}))
+
+
+for (i in 1:length(params$h2o.gus)) {
+	plot2d(params$h2o.gus[[i]], gus.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(gus.channel.min, gus.channel.max))
+	#info <- get_info(params$h2o.gus[i])
+	#kable(info, caption = paste("Summary of", params$h2o.gus[[i]]$name))
+}
+```
+
+
+
+## Albumin, follow up
+
+```{r 2dFigures_fu_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$fu.gus)) {
+	plot2d(params$fu.gus[[i]], gus.channel)
+	#info <- get_info(params$fu.gus[i])
+	#kable(info, caption = paste("Summary of", params$fu.gus[[i]]$name))
+}
+```
+
+
+
+
+## Marker, diagnostic sample
+
+```{r 2dFigures_dx_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+marker.results <- c(params$dx.marker, params$hl60.marker, params$h2o.marker, params$fu.marker)
+marker.channel.max <- max(sapply(marker.results, function(x) {max(x$intensities[, marker.channel])}))
+marker.channel.min <- min(sapply(marker.results, function(x) {min(x$intensities[, marker.channel])}))
+gus.channel.max <- max(sapply(marker.results, function(x) {max(x$intensities[, gus.channel])}))
+gus.channel.min <- min(sapply(marker.results, function(x) {min(x$intensities[, gus.channel])}))
+
+
+for (i in 1:length(params$dx.marker)) {
+	plot2d(params$dx.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(gus.channel.min, gus.channel.max))
+	#info <- get_info(params$dx.marker[i])
+	#kable(info, caption = paste("Summary of", params$dx.marker[[i]]$name))
+}
+```
+
+
+## Marker, HL60
+
+```{r 2dFigures_mnc_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$hl60.marker)) {
+	plot2d(params$hl60.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(gus.channel.min, gus.channel.max))
+	#info <- get_info(params$hl60.marker[i])
+	#kable(info, caption = paste("Summary of", params$hl60.marker[[i]]$name))
+}
+```
+
+
+## Marker, NTC/H2O
+
+```{r 2dFigures_h2o_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$h2o.marker)) {
+	plot2d(params$h2o.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(gus.channel.min, gus.channel.max))
+	#info <- get_info(params$h2o.marker[i])
+	#kable(info, caption = paste("Summary of", params$h2o.marker[[i]]$name))
+}
+```
+
+
+
+## Marker, follow up
+
+```{r 2dFigures_fu_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$fu.marker)) {
+	plot2d(params$fu.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(gus.channel.min, gus.channel.max))
+	#info <- get_info(params$fu.marker[i])
+	#kable(info, caption = paste("Summary of", params$fu.marker[[i]]$name))
+}
+```
+

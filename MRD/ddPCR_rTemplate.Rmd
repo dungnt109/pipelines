@@ -1,0 +1,360 @@
+---
+params:
+  pid: "Patient"
+  sid: "Sample"
+  mid: ""
+  date: "`r Sys.time()`"
+  marker.channel: 1
+  alb.channel: 2
+  dx.alb: ""
+  fu.alb: ""
+  mnc.alb: ""
+  h2o.alb: ""
+  dx.marker: ""
+  mnc.marker: ""
+  h2o.marker: ""
+  fu.marker: ""
+  dx.baseline: NA
+  mnc.alb.dilutionX: 200
+  mnc.alb.concentration: ""
+  show_outliers: TRUE
+title: "ddPCR laboratory results"
+fontsize: 10pt
+geometry: margin=1.5cm
+fig_width: 8 
+fig_height: 6
+output:
+  pdf_document:
+    keep_tex: false
+    toc: false
+    highlight: zenburn
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+---
+
+
+<!--- Define Headers and Footers --->
+\fancypagestyle{plain}{%
+  \renewcommand{\headrulewidth}{0pt}%
+  \fancyhf{}%
+  \fancyfoot[C]{\footnotesize Page \thepage\, of\, \pageref*{LastPage} `r params$sid` `r params$mid` Generated at `r params$date`}
+  \setlength\footskip{0pt}
+}
+\pagestyle{plain}
+\center
+# Sample `r params$sid`
+\center
+# Marker `r params$mid`
+
+
+```{r echo=FALSE}
+library(knitr)
+plot1d <- function(multiwell.results, channel, ...) {
+	x <- c()
+	y <- c()
+	mask <- c()
+	seg <- c(0)
+	lower <- c()
+	higher <- c()
+	mids <- c()
+	col <- c()
+	current.x <- 0
+	for (results in multiwell.results) {
+		x <- c(x, current.x + (1:nrow(results$intensities)))
+		
+		y <- c(y, results$intensities[, channel])
+		mask <- c(mask, results$mask)
+		lower <- c(lower, current.x)
+		mids <- c(mids, current.x + 0.5 * nrow(results$intensities))
+		current.x <- current.x + nrow(results$intensities)
+		higher <- c(higher, current.x)
+		col <- c(col, 1 + (results$intensities[, channel] > results$threshold))
+		seg <- c(seg, current.x + 0.5)
+	}
+	plot(x, y, cex=1, xlab="", ylab = "intensities", axes=FALSE, pch=c(4, 16)[mask + 1], col=col, ...)
+	box()
+	axis(2)
+	axis(1, at = mids, labels = FALSE)
+	
+	text(x = mids,
+     y = par("usr")[3] - (max(y) - min(y))/30,
+     labels = sapply(multiwell.results, "[[", "name"),
+     xpd = NA,
+     srt = 25,
+     cex = 0.8, adj=1)
+	 
+	for (i in 1:length(multiwell.results)) {
+		lines(c(lower[i], higher[i]), c(multiwell.results[[i]]$threshold, multiwell.results[[i]]$threshold), lty=1, col=2, lwd=2)
+	}
+	for (i in 1:length(seg)) {
+		lines(c(seg[i], seg[i]), c(1e-6, 1e6), col="blue", lty=1)
+	}
+}
+plot2d <- function(singlewell.results, channel, ...) {
+		plot(singlewell.results$intensities[, marker.channel], singlewell.results$intensities[, alb.channel], col = (singlewell.results$intensities[, channel] > singlewell.results$threshold) + 1,
+			pch=c(4, 16)[singlewell.results$mask + 1],
+			main=paste(singlewell.results$name, names(singlewell.results$name)), xlab = "Channel 1", ylab="Channel 2", ...)
+		if (channel == 1) {
+			lines(c(singlewell.results$threshold, singlewell.results$threshold), c(-1e8, 1e8), col=2, lwd=1.5)
+		} else if (channel == 2) {
+			lines(c(-1e8, 1e8), c(singlewell.results$threshold, singlewell.results$threshold), col=2, lwd=1.5)
+		}
+}
+get_info <- function(multiwell.results) {
+	tab <- t(sapply(multiwell.results, function(results) {
+		events <- nrow(results$intensities)
+		outliers <- results$n.outliers
+		used.events <- events - outliers
+		threshold <- results$threshold
+		positive <- results$n.positive.droplets
+		concentration <- results$concentration
+		c(events, outliers, used.events, threshold, positive, concentration)
+	}))
+	rownames(tab) <- sapply(multiwell.results, "[[", "name")
+	colnames(tab) <- c("events", "outliers", "used.events", "threshold", "positive", "concentration")
+	tab
+}
+
+get_merged_info <- function(multiwell.results, sample.names=NA) {
+	if (is.na(sample.names)) {
+		sample.names = sapply(multiwell.results, "[[", "name")
+	
+	}
+	tab <- get_info(multiwell.results)
+	unique.names <- unique(sample.names)
+	
+	total.events <- tapply(tab[, "events"], sample.names, sum)[unique.names]
+	total.outliers <- tapply(tab[, "outliers"], sample.names, sum)[unique.names]
+	total.used.events <- tapply(tab[, "used.events"], sample.names, sum)[unique.names]
+	total.positive <- tapply(tab[, "positive"], sample.names, sum)[unique.names]
+	concentration <- -log(1-(total.positive/total.used.events))/0.00085
+	concentration <- concentration[unique.names]
+	replicates <- tapply(tab[, "events"], sample.names, length)[unique.names]
+	info <- cbind(replicates=replicates, events=total.events, outliers=total.outliers, used.events=total.used.events,positive=total.positive,concentration=concentration )
+	rownames(info) <- unique.names
+	info
+}
+```
+
+
+
+# Albumin Results
+
+```{r fig1, fig.height=7, fig.width=12, fig.align="center", echo=FALSE}
+plot1d(c(params$dx.alb, params$mnc.alb, params$h2o.alb, params$fu.alb), 2, main="Intensities and annotation of albumin wells")
+alb.info <- get_info(c(params$dx.alb, params$mnc.alb, params$h2o.alb, params$fu.alb))
+alb.merged.info <- get_merged_info(c(params$dx.alb, params$mnc.alb, params$h2o.alb, params$fu.alb))
+kable(alb.info, caption = "Per well summary of Albumin results")
+kable(alb.merged.info, caption = "Per sample summary of Albumin results")
+```
+
+# Marker Results
+
+```{r fig2, fig.height=7, fig.width=12, fig.align="center", echo=FALSE}
+plot1d(c(params$dx.marker, params$mnc.marker, params$h2o.marker, params$fu.marker),1, main="Intensities and annotation of marker wells")
+marker.info <- get_info(c(params$dx.marker, params$mnc.marker, params$h2o.marker, params$fu.marker))
+marker.merged.info <- get_merged_info(c(params$dx.marker, params$mnc.marker, params$h2o.marker, params$fu.marker))
+kable(marker.info, caption = "Per well summary of marker results")
+kable(marker.merged.info, caption = "Per sample summary of marker results")
+```
+
+# MRD calculation
+
+```{r mrd_calculation, echo=FALSE}
+# cell contration at fullow up
+fu.alb.info <- get_merged_info(c(params$fu.alb))
+fu.alb.dilution.factor <- as.numeric(gsub("x$", "", strsplit(rownames(fu.alb.info), "_", fixed=TRUE)[[1]][4]))
+fu.cell.concentration <- fu.alb.info[1, "concentration"] * fu.alb.dilution.factor / 2
+if (nrow(fu.alb.info) > 1) {
+	print("warning, there are more than 1 albumin sample at follow up.")
+}
+# marker concentration at follow up
+fu.marker.info <- get_merged_info(c(params$fu.marker))
+# absolute mrd
+absolute.mrd <- fu.marker.info[1, "concentration"] / fu.cell.concentration
+
+# diagnostic baseline
+dx.baseline <- params$dx.baseline
+if (is.na(dx.baseline)) {
+	dx.alb.info <- get_merged_info(c(params$dx.alb))
+	dx.cell.concentration <- dx.alb.info[1, "concentration"] / 2
+	dx.marker.info <- get_merged_info(c(params$dx.marker))
+	dx.baseline <- dx.marker.info[1, "concentration"] / dx.cell.concentration
+	writeLines(paste("Using in-plate diagnostic baseline."))
+} else {
+	writeLines(paste("Using preset diagnostic baseline", dx.baseline))
+}
+
+# relatiive mrd
+relative.mrd <- absolute.mrd/dx.baseline
+
+# mrd in mnc
+mnc.marker.info <- get_merged_info(c(params$mnc.marker))
+
+if (mnc.marker.info[1, "positive"] == 0) {
+	mnc.marker.info[1, "positive"] <- 1
+	mnc.marker.info[1, "concentration"] <- -log(1-(mnc.marker.info[1, "positive"]/mnc.marker.info[1, "used.events"]))/0.00085
+	writeLines("No positive event of marker observed in MNC wells. 1 positive event assumed.")
+}
+
+mnc.alb.info <- get_merged_info(c(params$mnc.alb))
+mnc.alb.dilution.factor <- as.numeric(gsub("x$", "", strsplit(rownames(mnc.alb.info), "_", fixed=TRUE)[[1]][3]))
+
+#background.level <- mnc.marker.info[1, "concentration"]*2/(mnc.alb.info[1, "concentration"] * mnc.alb.dilution.factor)
+background.level <- mnc.marker.info[1, "concentration"]/(params$mnc.alb.concentration * params$mnc.alb.dilutionX / 2)
+
+# total cell no.
+total.cell.no <- ceiling(fu.cell.concentration * 20 * fu.marker.info[1, "replicates"])
+
+# thresholds
+ptv <- qbinom(0.9999, total.cell.no, background.level)/(20 * fu.marker.info[1, "replicates"])
+ntv <- qbinom(0.95, total.cell.no, background.level)/(20 * fu.marker.info[1, "replicates"])
+# mrd thresholds
+mrd.ptv <- (ptv/fu.cell.concentration)/dx.baseline
+mrd.ntv <- (ntv/fu.cell.concentration)/dx.baseline
+
+#
+mrd.call <- "NEG"
+if (relative.mrd > mrd.ptv) {
+	mrd.call <- "POS"
+} else if (relative.mrd > mrd.ntv) {
+	mrd.call <- "LOQ"
+}
+
+
+fu.marker.formatted <- sprintf("%#.3f", fu.marker.info[1, "concentration"])
+
+fu.cell.concentration.formatted <- sprintf("%#.3f", fu.cell.concentration)
+
+absolute.mrd.formatted <- formatC(absolute.mrd, format = "e", digits = 2)
+
+
+dx.baseline.formatted <- sprintf("%#.3f", dx.baseline)
+
+background.level.formatted <- formatC(background.level, format = "e", digits = 2)
+
+relative.mrd.formatted <- formatC(relative.mrd, format = "e", digits = 2)
+mrd.ntv.formatted <- formatC(mrd.ntv, format = "e", digits = 2)
+mrd.ptv.formatted <- formatC(mrd.ptv, format = "e", digits = 2)
+
+
+mrd.output.values <- c(fu.marker.formatted, fu.cell.concentration.formatted, absolute.mrd.formatted,  dx.baseline.formatted, background.level.formatted, relative.mrd.formatted, total.cell.no,  mrd.ntv.formatted, mrd.ptv.formatted, mrd.call)
+
+names(mrd.output.values) <- c("FU Marker copy/uL", "FU Alb copy/uL", "Absolute MRD", "Dx Baseline", "MNC Baseline", "MRD", "Total Cell Number", "NTV", "PTV", "Call")
+
+mrd.output.values <- as.matrix(mrd.output.values)
+
+colnames(mrd.output.values) <- "Values"
+
+kable(mrd.output.values, caption = "Summary of MRD calculation.")
+
+```
+
+# 2D Figures
+
+## Albumin, diagnostic sample
+
+```{r 2dFigures_dx_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$dx.alb)) {
+	plot2d(params$dx.alb[[i]], alb.channel)
+	#info <- get_info(params$dx.alb[i])
+	#kable(info, caption = paste("Summary of", params$dx.alb[[i]]$name))
+}
+```
+
+
+## Albumin, MNC
+
+```{r 2dFigures_mnc_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$mnc.alb)) {
+	plot2d(params$mnc.alb[[i]], alb.channel)
+	#info <- get_info(params$mnc.alb[i])
+	#kable(info, caption = paste("Summary of", params$mnc.alb[[i]]$name))
+}
+```
+
+
+## Albumin, NTC/H2O
+
+```{r 2dFigures_h2o_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+results <- c(params$mnc.alb, params$h2o.alb)
+marker.channel.max <- max(sapply(results, function(x) {max(x$intensities[, marker.channel])}))
+marker.channel.min <- min(sapply(results, function(x) {min(x$intensities[, marker.channel])}))
+alb.channel.max <- max(sapply(results, function(x) {max(x$intensities[, alb.channel])}))
+alb.channel.min <- min(sapply(results, function(x) {min(x$intensities[, alb.channel])}))
+
+
+for (i in 1:length(params$h2o.alb)) {
+	plot2d(params$h2o.alb[[i]], alb.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(alb.channel.min, alb.channel.max))
+	#info <- get_info(params$h2o.alb[i])
+	#kable(info, caption = paste("Summary of", params$h2o.alb[[i]]$name))
+}
+```
+
+
+
+## Albumin, follow up
+
+```{r 2dFigures_fu_alb, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$fu.alb)) {
+	plot2d(params$fu.alb[[i]], alb.channel)
+	#info <- get_info(params$fu.alb[i])
+	#kable(info, caption = paste("Summary of", params$fu.alb[[i]]$name))
+}
+```
+
+
+
+
+## Marker, diagnostic sample
+
+```{r 2dFigures_dx_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+marker.results <- c(params$dx.marker, params$mnc.marker, params$h2o.marker, params$fu.marker)
+marker.channel.max <- max(sapply(marker.results, function(x) {max(x$intensities[, marker.channel])}))
+marker.channel.min <- min(sapply(marker.results, function(x) {min(x$intensities[, marker.channel])}))
+alb.channel.max <- max(sapply(marker.results, function(x) {max(x$intensities[, alb.channel])}))
+alb.channel.min <- min(sapply(marker.results, function(x) {min(x$intensities[, alb.channel])}))
+
+
+for (i in 1:length(params$dx.marker)) {
+	plot2d(params$dx.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(alb.channel.min, alb.channel.max))
+	#info <- get_info(params$dx.marker[i])
+	#kable(info, caption = paste("Summary of", params$dx.marker[[i]]$name))
+}
+```
+
+
+## Marker, MNC
+
+```{r 2dFigures_mnc_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$mnc.marker)) {
+	plot2d(params$mnc.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(alb.channel.min, alb.channel.max))
+	#info <- get_info(params$mnc.marker[i])
+	#kable(info, caption = paste("Summary of", params$mnc.marker[[i]]$name))
+}
+```
+
+
+## Marker, NTC/H2O
+
+```{r 2dFigures_h2o_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$h2o.marker)) {
+	plot2d(params$h2o.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(alb.channel.min, alb.channel.max))
+	#info <- get_info(params$h2o.marker[i])
+	#kable(info, caption = paste("Summary of", params$h2o.marker[[i]]$name))
+}
+```
+
+
+
+## Marker, follow up
+
+```{r 2dFigures_fu_marker, fig.height=12, fig.width=12, fig.align="center", echo=FALSE}
+for (i in 1:length(params$fu.marker)) {
+	plot2d(params$fu.marker[[i]], marker.channel, xlim=c(marker.channel.min, marker.channel.max), ylim=c(alb.channel.min, alb.channel.max))
+	#info <- get_info(params$fu.marker[i])
+	#kable(info, caption = paste("Summary of", params$fu.marker[[i]]$name))
+}
+```
+
