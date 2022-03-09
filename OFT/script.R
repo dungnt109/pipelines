@@ -660,12 +660,42 @@ dx.sample.clust <- lapply(1:length(dx.marker.samples), function(i) {
 		h2o.marker <- h2o.results
 		
 		## draw figure 
-		render("./ddPCR_rTemplate_report.Rmd", params = list(sid = fu.sid, mid = mid, dx.gus = dx.gus, fu.gus = fu.gus, hl60.gus = hl60.gus, h2o.gus = h2o.gus, dx.marker = dx.marker, fu.marker=fu.marker, hl60.marker=hl60.marker, h2o.marker=h2o.marker, show_outliers=show_outliers, dx.baseline=dx.baseline, hl60.gus.dilutionX=hl60.gus.dilutionX, hl60.gus.concentration=hl60.gus.concentration, date=Sys.time()), 
-				output_file = paste(folder, separator, fu.sid, "_", mid, "_", runmode, "_report.pdf", sep="")
+		render("./ddPCR_rTemplate_report.Rmd", params = list(
+			sid = fu.sid, 
+			mid = mid, 
+			dx.gus = dx.gus, 
+			fu.gus = fu.gus, 
+			hl60.gus = hl60.gus, 
+			h2o.gus = h2o.gus, 
+			dx.marker = dx.marker, 
+			fu.marker=fu.marker, 
+			hl60.marker=hl60.marker, 
+			h2o.marker=h2o.marker, 
+			show_outliers=show_outliers, 
+			dx.baseline=dx.baseline, 
+			hl60.gus.dilutionX=hl60.gus.dilutionX, 
+			hl60.gus.concentration=hl60.gus.concentration, 
+			date=Sys.time()), 
+			output_file = paste(folder, separator, fu.sid, "_", mid, "_", runmode, "_report.pdf", sep="")
 		)
 		## draw figure 
-		render("./ddPCR_rTemplate_2dFigs.Rmd", params = list(sid = fu.sid, mid = mid, dx.gus = dx.gus, fu.gus = fu.gus, hl60.gus = hl60.gus, h2o.gus = h2o.gus, dx.marker = dx.marker, fu.marker=fu.marker, hl60.marker=hl60.marker, h2o.marker=h2o.marker, show_outliers=show_outliers, dx.baseline=dx.baseline, hl60.gus.dilutionX=hl60.gus.dilutionX, hl60.gus.concentration=hl60.gus.concentration, date=Sys.time()), 
-				output_file = paste(folder, separator, fu.sid, "_", mid, "_", runmode, "_2dFigs.pdf", sep="")
+		render("./ddPCR_rTemplate_2dFigs.Rmd", params = list(
+			sid = fu.sid, 
+			mid = mid, 
+			dx.gus = dx.gus, 
+			fu.gus = fu.gus, 
+			hl60.gus = hl60.gus, 
+			h2o.gus = h2o.gus, 
+			dx.marker = dx.marker, 
+			fu.marker=fu.marker, 
+			hl60.marker=hl60.marker, 
+			h2o.marker=h2o.marker, 
+			show_outliers=show_outliers, 
+			dx.baseline=dx.baseline, 
+			hl60.gus.dilutionX=hl60.gus.dilutionX, 
+			hl60.gus.concentration=hl60.gus.concentration, 
+			date=Sys.time()), 
+			output_file = paste(folder, separator, fu.sid, "_", mid, "_", runmode, "_2dFigs.pdf", sep="")
 		)
 	
 	}
